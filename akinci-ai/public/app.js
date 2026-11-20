@@ -1,5 +1,6 @@
 import { createMascots, STATUS_TEXT } from "./mascot.js";
 import { renderMarkdown } from "./markdown.js";
+import { api, initAccount, isSignedIn, refreshAccount, showAuth, showPlans, toast, updateQuota } from "./account.js";
 
 const SLEEP_AFTER_MS = 30_000;
 
@@ -48,20 +49,14 @@ armSleep();
 
 // ---------- oturum ----------
 async function newSession() {
-  const res = await fetch("/api/session", { method: "POST" });
-  sessionId = (await res.json()).sessionId;
+  sessionId = (await api("/api/session", {})).sessionId;
 }
 
 async function resetChat() {
   if (busy) controller?.abort();
-  if (sessionId) {
-    await fetch("/api/reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId }),
-    }).catch(() => {});
-  }
-  await newSession();
+  if (!isSignedIn()) return showAuth();
+  if (sessionId) await api("/api/reset", { sessionId }).catch(() => {});
+  await newSession().catch((err) => toast(err.message, "err"));
   list.innerHTML = "";
   empty.hidden = false;
   input.focus();
@@ -175,7 +170,15 @@ function setBusy(value) {
 
 async function send(text) {
   if (busy || !text.trim()) return;
-  if (!sessionId) await newSession();
+  if (!isSignedIn()) return showAuth();
+  if (!sessionId) {
+    try {
+      await newSession();
+    } catch (err) {
+      if (err.status === 401) return showAuth();
+      return toast(err.message, "err");
+    }
+  }
 
   empty.hidden = true;
   addUser(text);
@@ -204,6 +207,16 @@ async function send(text) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        li.remove();
+        list.lastElementChild?.remove();
+        if (!list.children.length) empty.hidden = false;
+        input.value = text;
+        showAuth();
+        return;
+      }
+      if (err.code === "quota_exceeded" || err.code === "too_long") showPlans(err.error);
+      if (err.code === "no_session") sessionId = null;
       throw new Error(err.error || `Sunucu hatası (${res.status})`);
     }
 
@@ -217,15 +230,21 @@ async function send(text) {
       } else if (event === "fallback") {
         note(li, `Yedek modele geçildi: ${data.to}`);
       } else if (event === "refusal") {
+        updateQuota(data.quota);
         note(li, "Bu istek güvenlik nedeniyle yanıtlanamadı. Soruyu farklı ifade etmeyi dene.", true);
       } else if (event === "done") {
+        updateQuota(data.quota);
         if (data.stopReason === "max_tokens") note(li, "Cevap uzunluk sınırına ulaştı ve kesildi.");
       } else if (event === "error") {
+        updateQuota(data.quota);
         note(li, data.message, true);
       }
     }
   } catch (err) {
-    if (err.name === "AbortError") note(li, "Durduruldu. Bu tur sohbet geçmişine eklenmedi.");
+    if (err.name === "AbortError") {
+      note(li, "Durduruldu. Bu tur sohbet geçmişine eklenmedi.");
+      refreshAccount().catch(() => {});
+    }
     else note(li, err.message || "Bağlantı hatası.", true);
   } finally {
     if (frame) cancelAnimationFrame(frame);
@@ -261,6 +280,15 @@ for (const chip of document.querySelectorAll(".chip")) {
   chip.addEventListener("click", () => send(chip.textContent));
 }
 
-fetch("/api/info").then((r) => r.json()).then((i) => ($("meta").textContent = `Model: ${i.model}`)).catch(() => {});
-newSession().catch(() => {});
-input.focus();
+initAccount({
+  onLogin: () => {
+    sessionId = null;
+    list.innerHTML = "";
+    empty.hidden = false;
+    input.focus();
+  },
+}).catch(() => toast("Sunucuya bağlanılamadı.", "err"));
+
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
