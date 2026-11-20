@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Akıncı AI</title>
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-name">AKINCI</span><span class="brand-ai">AI</span>
+      </div>
+
+      <div class="desk">
+        <div class="mascot mascot-lg" data-state="coffee" aria-hidden="true"></div>
+        <div class="desk-floor"></div>
+        <p class="status" id="status" aria-live="polite">Kahve içiyor</p>
+      </div>
+
+      <button class="btn btn-ghost" id="newChat" type="button">+ Yeni sohbet</button>
+      <p class="meta" id="meta"></p>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="mascot mascot-sm" data-state="coffee" aria-hidden="true"></div>
+        <div class="topbar-text">
+          <span class="brand-name">AKINCI</span><span class="brand-ai">AI</span>
+          <span class="status status-sm" id="statusSm">Kahve içiyor</span>
+        </div>
+        <button class="btn btn-ghost btn-icon" id="newChatSm" type="button" aria-label="Yeni sohbet">+</button>
+      </header>
+
+      <section class="chat" id="chat">
+        <div class="empty" id="empty">
+          <h1 class="empty-title">Ne sormak istersin?</h1>
+          <p class="empty-sub">Akıncı hazır. Sorunu yaz, gerisini o halleder.</p>
+          <div class="chips">
+            <button class="chip" type="button">TypeScript'te debounce fonksiyonu yaz</button>
+            <button class="chip" type="button">Kuantum bilgisayarı 3 maddede açıkla</button>
+            <button class="chip" type="button">Haftalık spor programı hazırla</button>
+            <button class="chip" type="button">SQL'de JOIN türlerini karşılaştır</button>
+          </div>
+        </div>
+        <ol class="messages" id="messages"></ol>
+      </section>
+
+      <form class="composer" id="composer">
+        <div class="composer-box">
+          <textarea id="input" rows="1" placeholder="Akıncı'ya bir soru sor…" autocomplete="off" required></textarea>
+          <button class="btn btn-send" id="send" type="submit" aria-label="Gönder">
+            <svg viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><path fill="currentColor" d="M3 0h2v1h1v1h1v1h1v1H5v4H3V4H0V3h1V2h1V1h1z"/></svg>
+          </button>
+          <button class="btn btn-stop" id="stop" type="button" aria-label="Durdur" hidden>
+            <svg viewBox="0 0 8 8" width="14" height="14" shape-rendering="crispEdges"><path fill="currentColor" d="M1 1h6v6H1z"/></svg>
+          </button>
+        </div>
+        <p class="hint">Enter gönderir · Shift+Enter yeni satır</p>
+      </form>
+    </main>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
