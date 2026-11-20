@@ -74,6 +74,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .empty { max-width: 720px; margin: 10vh auto 0; text-align: center; }
 .empty-title { font-family: var(--pixel); font-size: 20px; line-height: 1.6; margin: 0 0 12px; }
 .empty-sub { color: var(--muted); margin: 0 0 28px; }
+.chips-label { margin: 18px 0 10px; font-family: var(--pixel); font-size: 9px; color: var(--muted); letter-spacing: .5px; }
 .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .chip {
   border: 1px solid var(--line); background: var(--panel); border-radius: 999px;
@@ -121,10 +122,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 6px 10px; font: 12px var(--mono); color: var(--muted); background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
+.codeblock-actions { display: flex; gap: 4px; }
 .codeblock-head button { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 2px 6px; }
 .codeblock-head button:hover { color: var(--text); }
 .codeblock pre { margin: 0; padding: 12px 14px; overflow-x: auto; }
-.codeblock code { background: none; padding: 0; font-size: 13px; line-height: 1.55; }
+.codeblock code, .codeblock code.hljs { background: none; padding: 0; font-size: 13px; line-height: 1.55; }
 
 /* composer */
 .composer { padding: 12px 24px 18px; }

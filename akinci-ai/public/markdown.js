@@ -1,4 +1,15 @@
 // Küçük, güvenli Markdown işleyici: önce HTML kaçırılır, sonra sınırlı sözdizimi uygulanır.
+// Kod blokları highlight.js yüklüyse renklendirilir (hljs çıktısı zaten HTML-kaçırılmıştır).
+
+function highlight(code, lang) {
+  const hljs = globalThis.hljs;
+  if (hljs && lang && hljs.getLanguage(lang)) {
+    try {
+      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    } catch {}
+  }
+  return null;
+}
 
 const esc = (s) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -42,8 +53,9 @@ export function renderMarkdown(src) {
       i++;
       while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) body.push(lines[i++]);
       i++;
+      const code = body.join("\n");
       out.push(
-        `<div class="codeblock"><div class="codeblock-head"><span>${esc(lang || "kod")}</span><button type="button" data-copy>Kopyala</button></div><pre><code>${esc(body.join("\n"))}</code></pre></div>`,
+        `<div class="codeblock" data-lang="${esc(lang)}"><div class="codeblock-head"><span>${esc(lang || "kod")}</span><span class="codeblock-actions"><button type="button" data-download>İndir</button><button type="button" data-copy>Kopyala</button></span></div><pre><code class="hljs">${highlight(code, lang) ?? esc(code)}</code></pre></div>`,
       );
       continue;
     }

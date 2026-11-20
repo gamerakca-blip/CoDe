@@ -102,6 +102,27 @@ function note(li, text, isError = false) {
   li.querySelector(".col").append(p);
 }
 
+const EXT = {
+  python: "py", py: "py", javascript: "js", js: "js", typescript: "ts", ts: "ts", tsx: "tsx", jsx: "jsx",
+  html: "html", css: "css", json: "json", bash: "sh", sh: "sh", shell: "sh", powershell: "ps1",
+  sql: "sql", java: "java", kotlin: "kt", go: "go", rust: "rs", c: "c", cpp: "cpp", "c++": "cpp",
+  csharp: "cs", cs: "cs", php: "php", ruby: "rb", swift: "swift", dart: "dart", yaml: "yml", yml: "yml",
+  xml: "xml", markdown: "md", md: "md", dockerfile: "Dockerfile",
+};
+
+list.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-download]");
+  if (!btn) return;
+  const block = btn.closest(".codeblock");
+  const lang = (block.dataset.lang || "").toLowerCase();
+  const ext = EXT[lang] ?? "txt";
+  const name = ext === "Dockerfile" ? "Dockerfile" : `akinci-kod.${ext}`;
+  const url = URL.createObjectURL(new Blob([block.querySelector("code").textContent], { type: "text/plain;charset=utf-8" }));
+  const a = Object.assign(document.createElement("a"), { href: url, download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
 list.addEventListener("click", async (e) => {
   const btn = e.target.closest("[data-copy]");
   if (!btn) return;

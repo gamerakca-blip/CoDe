@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="vendor/hljs-theme.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -39,13 +40,19 @@
 
       <section class="chat" id="chat">
         <div class="empty" id="empty">
-          <h1 class="empty-title">Ne sormak istersin?</h1>
-          <p class="empty-sub">Akıncı hazır. Sorunu yaz, gerisini o halleder.</p>
+          <h1 class="empty-title">Ne yazalım?</h1>
+          <p class="empty-sub">Kod yazar, hata ayıklar, Osmanlı tarihini ve Osmanlıcayı anlatır.</p>
+          <p class="chips-label">Kod</p>
           <div class="chips">
-            <button class="chip" type="button">TypeScript'te debounce fonksiyonu yaz</button>
-            <button class="chip" type="button">Kuantum bilgisayarı 3 maddede açıkla</button>
-            <button class="chip" type="button">Haftalık spor programı hazırla</button>
-            <button class="chip" type="button">SQL'de JOIN türlerini karşılaştır</button>
+            <button class="chip" type="button">Python ile klasördeki dosyaları tarihe göre yeniden adlandıran betik yaz</button>
+            <button class="chip" type="button">React'te sürükle-bırak yapılacaklar listesi yap</button>
+            <button class="chip" type="button">Express ile JWT girişli REST API kur</button>
+          </div>
+          <p class="chips-label">Osmanlı</p>
+          <div class="chips">
+            <button class="chip" type="button">Kanuni Sultan Süleyman dönemini ana hatlarıyla anlat</button>
+            <button class="chip" type="button">"Devlet-i Aliyye-i Osmaniyye" ne demek, kelimelerin kökeni ne?</button>
+            <button class="chip" type="button">Hicri tarihi Miladi tarihe çeviren TypeScript fonksiyonu yaz</button>
           </div>
         </div>
         <ol class="messages" id="messages"></ol>
@@ -53,7 +60,7 @@
 
       <form class="composer" id="composer">
         <div class="composer-box">
-          <textarea id="input" rows="1" placeholder="Akıncı'ya bir soru sor…" autocomplete="off" required></textarea>
+          <textarea id="input" rows="1" placeholder="Kod iste veya Osmanlı hakkında sor…" autocomplete="off" required></textarea>
           <button class="btn btn-send" id="send" type="submit" aria-label="Gönder">
             <svg viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><path fill="currentColor" d="M3 0h2v1h1v1h1v1h1v1H5v4H3V4H0V3h1V2h1V1h1z"/></svg>
           </button>
@@ -66,6 +73,7 @@
     </main>
   </div>
 
+  <script src="vendor/highlight.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

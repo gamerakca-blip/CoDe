@@ -1,6 +1,11 @@
 # Akıncı AI
 
-Claude (Opus 5.5) tabanlı, akış (streaming) cevaplı web sohbet uygulaması. Pikselli fesli maskot uygulamanın durumunu gösterir:
+Claude (Opus 5.5) tabanlı, akış (streaming) cevaplı web sohbet uygulaması. İki uzmanlık alanı vardır:
+
+- **Kod yazma:** eksiksiz, çalıştırılabilir kod; renklendirilmiş kod blokları, kopyalama ve dosya olarak indirme
+- **Osmanlı:** tarih, kurumlar, kültür; Osmanlı Türkçesi transkripsiyonu, sadeleştirme ve kelime kökenleri; Hicri/Rumi → Miladi tarih karşılıkları
+
+ Pikselli fesli maskot uygulamanın durumunu gösterir:
 
 | Durum | Maskot |
 |---|---|
@@ -27,7 +32,7 @@ Geliştirme modu: `npm run dev`
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Anthropic API anahtarı (zorunlu) |
 | `AKINCI_MODEL` | `claude-opus-5-5` | Kullanılacak model |
-| `AKINCI_EFFORT` | `medium` | `low` / `medium` / `high` / `xhigh` / `max` |
+| `AKINCI_EFFORT` | `high` | `low` / `medium` / `high` / `xhigh` / `max` |
 | `PORT` | `3000` | Sunucu portu |
 
 ## Yapı
