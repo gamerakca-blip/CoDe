@@ -1,0 +1,41 @@
+# Render "Blueprint": Render panelinde New > Blueprint ile bu depoyu seç.
+# sync: false olan değerleri Render kurulum ekranında sen girersin; GitHub'a yazılmaz.
+services:
+  - type: web
+    name: akinci-ai
+    runtime: docker
+    dockerContext: ./akinci-ai
+    dockerfilePath: ./akinci-ai/Dockerfile
+    plan: starter
+    healthCheckPath: /healthz
+    disk:
+      name: akinci-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OWNER_EMAILS
+        sync: false
+      - key: OWNER_SIGNUP_CODE
+        generateValue: true
+      - key: IYZICO_API_KEY
+        sync: false
+      - key: IYZICO_SECRET_KEY
+        sync: false
+      - key: IYZICO_BASE_URL
+        value: https://sandbox-api.iyzipay.com
+      - key: TRUST_PROXY
+        value: "1"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: SELLER_NAME
+        sync: false
+      - key: SELLER_ADDRESS
+        sync: false
+      - key: SELLER_EMAIL
+        sync: false
+      - key: SELLER_PHONE
+        sync: false
+      - key: SELLER_TAX
+        sync: false

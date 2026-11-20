@@ -1,6 +1,8 @@
-import express, { type Request, type Response } from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
+import helmet from "helmet";
 import Anthropic from "@anthropic-ai/sdk";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,8 +16,20 @@ const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? "0.0.0.0";
 const MODEL = process.env.AKINCI_MODEL ?? "claude-opus-5-5";
 const PAYMENT_MODE = process.env.PAYMENT_MODE === "demo" ? "demo" : "iyzico";
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL?.replace(/\/+$/, "");
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? process.env.RENDER_EXTERNAL_URL)?.replace(/\/+$/, "");
 const CHAT_TTL_MS = 6 * 60 * 60 * 1000;
+
+// Site sahibi: bu e-postalar herkese açık kayıtla alınamaz; yalnızca OWNER_SIGNUP_CODE ile kaydolur ve süresiz Full alır.
+const OWNER_EMAILS = new Set(
+  (process.env.OWNER_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
+);
+const OWNER_SIGNUP_CODE = process.env.OWNER_SIGNUP_CODE ?? "";
+
+function secretEquals(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 const client = new Anthropic();
 
@@ -51,8 +65,8 @@ function contentForHistory(content: Anthropic.Beta.BetaContentBlock[]): Anthropi
 function accountView(user: UserRow) {
   const { plan, expiresAt } = effectivePlan(user);
   return {
-    user: { email: user.email, name: user.name },
-    plan: { id: plan.id, name: plan.name, expiresAt },
+    user: { email: user.email, name: user.name, role: user.role },
+    plan: { id: plan.id, name: user.role === "owner" ? `${plan.name} · Sahip` : plan.name, expiresAt },
     usage: { used: usage.get(user.id, todayKey()), limit: plan.dailyMessages },
   };
 }
@@ -64,6 +78,35 @@ const app = express();
 if (process.env.TRUST_PROXY) app.set("trust proxy", process.env.TRUST_PROXY);
 app.disable("x-powered-by");
 
+const httpsOnly = process.env.COOKIE_SECURE === "true";
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+        manifestSrc: ["'self'"],
+        workerSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'none'"],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+        ...(httpsOnly ? { upgradeInsecureRequests: [] } : {}),
+      },
+    },
+    strictTransportSecurity: httpsOnly ? { maxAge: 31_536_000, includeSubDomains: true } : false,
+    crossOriginEmbedderPolicy: false,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  }),
+);
+
+app.get("/healthz", (_req, res) => res.json({ ok: true }));
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 app.use(express.static(path.join(here, "..", "public")));
 
@@ -72,7 +115,13 @@ app.get("/vendor/highlight.min.js", (_req, res) => res.sendFile(path.join(hljsDi
 app.get("/vendor/hljs-theme.css", (_req, res) => res.sendFile(path.join(hljsDir, "styles", "github-dark.min.css")));
 
 // iyzico geri dönüşü form-urlencoded POST'tur ve iyzico alan adından gelir; sameOrigin'den önce tanımlı.
-app.post("/api/payment/iyzico/callback", express.urlencoded({ extended: false, limit: "16kb" }), async (req, res) => {
+const callbackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  key: (req) => `cb:${req.ip}`,
+  message: "Çok fazla istek.",
+});
+app.post("/api/payment/iyzico/callback", callbackLimiter, express.urlencoded({ extended: false, limit: "16kb" }), async (req, res) => {
   const token = String(req.body?.token ?? "");
   const order = token ? orders.byToken(token) : undefined;
   if (!order) {
@@ -135,13 +184,35 @@ app.post("/api/auth/register", authLimiter, async (req: Request, res: Response) 
   if (password.length < 8 || password.length > 200) return void res.status(400).json({ error: "Şifre en az 8 karakter olmalı." });
   if (users.byEmail(email)) return void res.status(409).json({ error: "Bu e-posta zaten kayıtlı." });
 
-  const user = users.create(email, name, await hashPassword(password));
+  let role: "user" | "owner" = "user";
+  if (OWNER_EMAILS.has(email)) {
+    const code = String(req.body?.ownerCode ?? "");
+    if (!OWNER_SIGNUP_CODE) {
+      return void res.status(403).json({ error: "Bu e-posta site sahibine ayrılmış. Sunucuda OWNER_SIGNUP_CODE ayarlanmalı." });
+    }
+    if (!code) {
+      return void res.status(403).json({ error: "Bu hesap için sahip kodu gerekli.", code: "owner_code_required" });
+    }
+    if (!secretEquals(code, OWNER_SIGNUP_CODE)) {
+      return void res.status(403).json({ error: "Sahip kodu hatalı.", code: "owner_code_required" });
+    }
+    role = "owner";
+  }
+
+  const user = users.create(email, name, await hashPassword(password), role);
   users.touchLogin(user.id);
   startSession(req, res, user.id);
   res.json(accountView(user));
 });
 
-app.post("/api/auth/login", authLimiter, async (req: Request, res: Response) => {
+const loginEmailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  key: (req) => `login:${String(req.body?.email ?? "").trim().toLowerCase()}`,
+  message: "Bu hesap için çok fazla hatalı deneme. 15 dakika sonra tekrar dene.",
+});
+
+app.post("/api/auth/login", authLimiter, loginEmailLimiter, async (req: Request, res: Response) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
   const user = users.byEmail(email);
@@ -152,6 +223,20 @@ app.post("/api/auth/login", authLimiter, async (req: Request, res: Response) => 
   users.touchLogin(user.id);
   startSession(req, res, user.id);
   res.json(accountView(user));
+});
+
+app.post("/api/auth/password", requireUser, authLimiter, async (req: Request, res: Response) => {
+  const user = req.user!;
+  const current = String(req.body?.current ?? "");
+  const next = String(req.body?.next ?? "");
+  if (!(await verifyPassword(current, user.password_hash))) {
+    return void res.status(401).json({ error: "Mevcut şifre hatalı." });
+  }
+  if (next.length < 8 || next.length > 200) return void res.status(400).json({ error: "Yeni şifre en az 8 karakter olmalı." });
+  users.setPassword(user.id, await hashPassword(next));
+  users.revokeSessions(user.id); // diğer cihazlardaki oturumlar kapanır
+  startSession(req, res, user.id);
+  res.json({ ok: true });
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -172,6 +257,10 @@ app.post("/api/checkout", requireUser, async (req: Request, res: Response) => {
     return;
   }
   const user = req.user!;
+  if (user.role === "owner") return void res.status(400).json({ error: "Sahip hesabında Full plan zaten süresiz açık." });
+  if (req.body?.accept !== true) {
+    return void res.status(400).json({ error: "Mesafeli satış sözleşmesini onaylaman gerekiyor." });
+  }
   const plan = PLANS[planId];
   const orderId = `AK${Date.now()}${randomUUID().slice(0, 8)}`;
   orders.create(orderId, user.id, plan.id, plan.priceTry);
@@ -323,6 +412,45 @@ app.post("/api/chat", requireUser, chatLimiter, async (req: Request, res: Respon
   }
 });
 
+// ---------- yasal sayfalar ----------
+const SELLER: Record<string, string> = {
+  SELLER_NAME: process.env.SELLER_NAME ?? "[Satıcı adı / unvanı]",
+  SELLER_ADDRESS: process.env.SELLER_ADDRESS ?? "[Satıcı adresi]",
+  SELLER_EMAIL: process.env.SELLER_EMAIL ?? "[İletişim e-postası]",
+  SELLER_PHONE: process.env.SELLER_PHONE ?? "[Telefon]",
+  SELLER_TAX: process.env.SELLER_TAX ?? "[Vergi dairesi / vergi no]",
+  SITE_URL: PUBLIC_BASE_URL ?? "[Site adresi]",
+};
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const LEGAL_PAGES = new Set(["mesafeli-satis", "iade", "gizlilik", "iletisim"]);
+const legalCache = new Map<string, string>();
+
+app.get("/yasal/:page", (req, res, next) => {
+  const page = String(req.params.page);
+  if (!LEGAL_PAGES.has(page)) return next();
+  let html = legalCache.get(page);
+  if (!html) {
+    const tpl = readFileSync(path.join(here, "..", "legal", `${page}.html`), "utf8");
+    html = tpl.replace(/\{\{(\w+)\}\}/g, (_m, k: string) => escapeHtml(SELLER[k] ?? ""));
+    legalCache.set(page, html);
+  }
+  res.type("html").send(html);
+});
+
+app.use("/api", (_req, res) => res.status(404).json({ error: "Bulunamadı." }));
+
+// Beklenmeyen hatalarda iç ayrıntı istemciye sızmaz.
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const status = (err as { status?: number })?.status;
+  if (status && status >= 400 && status < 500) {
+    res.status(status).json({ error: "Geçersiz istek." });
+    return;
+  }
+  console.error(err);
+  res.status(500).json({ error: "Sunucu hatası." });
+});
+
 function describeError(err: unknown): string {
   if (err instanceof Anthropic.AuthenticationError) return "Sunucunun API anahtarı geçersiz veya eksik.";
   if (err instanceof Anthropic.PermissionDeniedError) return "Bu modele erişim izni yok.";
@@ -340,6 +468,11 @@ app.listen(PORT, HOST, () => {
     for (const n of nets ?? []) {
       if (n.family === "IPv4" && !n.internal) console.log(`  Telefondan (aynı Wi-Fi): http://${n.address}:${PORT}`);
     }
+  }
+  for (const email of OWNER_EMAILS) {
+    const u = users.byEmail(email);
+    if (u && u.role !== "owner") console.warn(`  UYARI: ${email} sıradan kullanıcı olarak kayıtlı; sahip yetkisi verilmedi.`);
+    if (!u && !OWNER_SIGNUP_CODE) console.warn(`  UYARI: ${email} sahip hesabı için OWNER_SIGNUP_CODE ayarlanmamış.`);
   }
   if (PAYMENT_MODE === "demo") console.warn("  UYARI: PAYMENT_MODE=demo — planlar ödeme alınmadan açılır. Canlıda kullanma.");
   else if (!iyzicoConfigured) console.warn("  UYARI: IYZICO_API_KEY / IYZICO_SECRET_KEY eksik — satın alma kapalı.");

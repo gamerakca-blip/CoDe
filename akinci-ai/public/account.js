@@ -92,6 +92,15 @@ function renderPlans() {
   const box = $("plans");
   box.innerHTML = "";
   const current = account?.plan.id ?? "free";
+  const owner = account?.user.role === "owner";
+  $("consentRow").hidden = owner || !paymentReady;
+  let note = box.previousElementSibling?.classList?.contains("owner-note") ? box.previousElementSibling : null;
+  if (owner && !note) {
+    note = document.createElement("p");
+    note.className = "owner-note";
+    note.textContent = "Sahip hesabısın: Full plan süresiz ve ücretsiz açık.";
+    box.before(note);
+  }
   for (const p of plans) {
     const card = document.createElement("div");
     card.className = "plan" + (p.id === "pro" ? " popular" : "");
@@ -117,6 +126,10 @@ function renderPlans() {
       btn.disabled = true;
       btn.textContent = "Ödeme yakında";
     }
+    if (owner) {
+      btn.disabled = true;
+      btn.textContent = p.id === "full" ? "Aktif (sahip)" : "—";
+    }
     if (!btn.disabled) btn.addEventListener("click", () => checkout(p.id, btn));
     card.append(btn);
     box.append(card);
@@ -124,11 +137,16 @@ function renderPlans() {
 }
 
 async function checkout(planId, btn) {
+  if (!$("consent").checked) {
+    toast("Devam etmek için sözleşme onay kutusunu işaretle.", "err");
+    $("consentRow").scrollIntoView({ block: "center", behavior: "smooth" });
+    return;
+  }
   btn.disabled = true;
   const old = btn.textContent;
   btn.textContent = "Yönlendiriliyor…";
   try {
-    const { url } = await api("/api/checkout", { plan: planId });
+    const { url } = await api("/api/checkout", { plan: planId, accept: true });
     location.href = url;
   } catch (err) {
     toast(err.message, "err");
@@ -158,6 +176,7 @@ function setMode(m) {
     t.setAttribute("aria-selected", String(active));
   }
   $("nameField").hidden = m !== "register";
+  $("ownerField").hidden = true;
   $("authSubmit").textContent = m === "register" ? "Kayıt ol" : "Giriş yap";
   $("authForm").elements.password.autocomplete = m === "register" ? "new-password" : "current-password";
   $("authError").textContent = "";
@@ -176,6 +195,7 @@ async function submitAuth(e) {
   const el = f.elements;
   const body = { email: el.email.value.trim(), password: el.password.value };
   if (mode === "register") body.name = el.name.value.trim();
+  if (!$("ownerField").hidden) body.ownerCode = el.ownerCode.value;
   $("authSubmit").disabled = true;
   $("authError").textContent = "";
   try {
@@ -183,10 +203,19 @@ async function submitAuth(e) {
     f.reset();
     $("authView").hidden = true;
     render();
-    toast(mode === "register" ? "Hoş geldin! Free planla başladın." : `Tekrar hoş geldin, ${account.user.name}.`);
+    const owner = account.user.role === "owner";
+    toast(
+      mode === "register"
+        ? owner ? "Sahip hesabın açıldı: Full plan süresiz." : "Hoş geldin! Free planla başladın."
+        : `Tekrar hoş geldin, ${account.user.name}.`,
+    );
     onLoginCb();
   } catch (err) {
     $("authError").textContent = err.message;
+    if (err.code === "owner_code_required") {
+      $("ownerField").hidden = false;
+      el.ownerCode.focus();
+    }
   } finally {
     $("authSubmit").disabled = false;
   }
@@ -213,6 +242,19 @@ export async function initAccount({ onLogin }) {
   $("closePlans").addEventListener("click", hidePlans);
   $("plansView").addEventListener("click", (e) => { if (e.target === $("plansView")) hidePlans(); });
   $("logout").addEventListener("click", logout);
+  $("pwForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = $("pwForm").elements;
+    $("pwError").textContent = "";
+    try {
+      await api("/api/auth/password", { current: f.current.value, next: f.next.value });
+      $("pwForm").reset();
+      $("pwForm").closest("details").open = false;
+      toast("Şifren güncellendi. Diğer cihazlardaki oturumlar kapatıldı.");
+    } catch (err) {
+      $("pwError").textContent = err.message;
+    }
+  });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("plansView").hidden) hidePlans(); });
 
   const [info, planData] = await Promise.all([api("/api/info"), api("/api/plans")]);

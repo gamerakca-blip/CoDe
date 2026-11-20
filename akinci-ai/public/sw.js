@@ -1,7 +1,7 @@
 // Uygulama kabuğunu önbelleğe alır; API istekleri her zaman ağdan gider.
-const CACHE = "akinci-v1";
+const CACHE = "akinci-v2";
 const SHELL = [
-  "/", "/index.html", "/style.css", "/app.js", "/account.js", "/mascot.js", "/markdown.js",
+  "/", "/index.html", "/style.css", "/fonts.css", "/app.js", "/account.js", "/mascot.js", "/markdown.js",
   "/manifest.webmanifest", "/icons/icon-192.png", "/vendor/highlight.min.js", "/vendor/hljs-theme.css",
 ];
 

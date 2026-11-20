@@ -13,9 +13,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="fonts.css" />
   <link rel="stylesheet" href="vendor/hljs-theme.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -117,10 +115,14 @@
           <span>Şifre</span>
           <input name="password" type="password" autocomplete="current-password" minlength="8" required />
         </label>
+        <label class="field" id="ownerField" hidden>
+          <span>Sahip kodu</span>
+          <input name="ownerCode" type="password" autocomplete="off" />
+        </label>
         <p class="form-error" id="authError" role="alert"></p>
         <button class="btn btn-primary" id="authSubmit" type="submit">Giriş yap</button>
       </form>
-      <p class="fineprint">Ücretsiz plan: günde 50 mesaj. Kayıt olunca hemen başlar.</p>
+      <p class="fineprint">Ücretsiz plan: günde 50 mesaj. Kayıt olarak <a href="/yasal/gizlilik" target="_blank" rel="noopener">Gizlilik ve KVKK metnini</a> okuduğunu kabul edersin.</p>
     </div>
   </div>
 
@@ -131,8 +133,23 @@
       <h2 class="dialog-title" id="plansTitle">Planlar</h2>
       <p class="plans-msg" id="plansMsg" hidden></p>
       <div class="account-mobile" id="accMobile"></div>
+      <label class="consent" id="consentRow">
+        <input type="checkbox" id="consent" />
+        <span><a href="/yasal/mesafeli-satis" target="_blank" rel="noopener">Mesafeli Satış Sözleşmesi</a>'ni ve <a href="/yasal/iade" target="_blank" rel="noopener">İptal ve İade Koşulları</a>'nı okudum. Hizmetin ödemeden hemen sonra başlamasını ve bu nedenle cayma hakkımın olmadığını kabul ediyorum.</span>
+      </label>
       <div class="plans" id="plans"></div>
-      <p class="fineprint">Ödemeler iyzico güvencesiyle alınır. Ücretli planlar 30 gün geçerlidir; süre bitince Free plana dönülür.</p>
+      <p class="fineprint">Ödemeler iyzico güvencesiyle alınır; kart bilgilerin bu siteye gelmez. Ücretli planlar 30 gün geçerlidir ve otomatik yenilenmez.</p>
+
+      <details class="pw">
+        <summary>Şifre değiştir</summary>
+        <form id="pwForm" novalidate>
+          <label class="field"><span>Mevcut şifre</span><input name="current" type="password" autocomplete="current-password" required /></label>
+          <label class="field"><span>Yeni şifre (en az 8 karakter)</span><input name="next" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <p class="form-error" id="pwError" role="alert"></p>
+          <button class="btn btn-primary" type="submit">Şifreyi güncelle</button>
+        </form>
+      </details>
+      <p class="legal-links"><a href="/yasal/mesafeli-satis" target="_blank" rel="noopener">Mesafeli Satış</a> · <a href="/yasal/iade" target="_blank" rel="noopener">İptal ve İade</a> · <a href="/yasal/gizlilik" target="_blank" rel="noopener">Gizlilik ve KVKK</a> · <a href="/yasal/iletisim" target="_blank" rel="noopener">İletişim</a></p>
     </div>
   </div>
 

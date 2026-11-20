@@ -1,20 +1,20 @@
-import Iyzipay from "iyzipay";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { UserRow, OrderRow } from "../db.js";
 import { PLANS } from "../plans.js";
 
 /**
- * iyzico Ödeme Formu (Checkout Form) entegrasyonu.
+ * iyzico Ödeme Formu (Checkout Form) entegrasyonu, iyzico REST API'si doğrudan çağrılır
+ * (resmi Node paketinin bağımlılıklarında güvenlik açığı olduğu için kullanılmıyor).
  * Akış: initialize -> kullanıcı iyzico ödeme sayfasına yönlenir -> iyzico callbackUrl'e
  * `token` POST eder -> sunucu `retrieve` ile sonucu iyzico'dan doğrular.
  */
 
 const API_KEY = process.env.IYZICO_API_KEY ?? "";
 const SECRET_KEY = process.env.IYZICO_SECRET_KEY ?? "";
-const BASE_URL = process.env.IYZICO_BASE_URL ?? "https://sandbox-api.iyzipay.com";
+const BASE_URL = (process.env.IYZICO_BASE_URL ?? "https://sandbox-api.iyzipay.com").replace(/\/+$/, "");
 
 // iyzico alıcı bilgisi ister. Dijital abonelikte adres toplanmıyorsa işyeri bilgisi kullanılır.
-// T.C. kimlik no toplanmıyorsa iyzico'nun kabul ettiği 11111111111 gönderilir; iyzico hesabınla teyit et.
+// T.C. kimlik no toplanmıyorsa 11111111111 gönderilir; bunun hesabın için uygun olduğunu iyzico ile teyit et.
 const BUYER_IDENTITY = process.env.IYZICO_BUYER_IDENTITY ?? "11111111111";
 const BUYER_CITY = process.env.IYZICO_BUYER_CITY ?? "Istanbul";
 const BUYER_COUNTRY = process.env.IYZICO_BUYER_COUNTRY ?? "Turkey";
@@ -22,14 +22,30 @@ const BUYER_ADDRESS = process.env.IYZICO_BUYER_ADDRESS ?? "Dijital hizmet - adre
 
 export const iyzicoConfigured = Boolean(API_KEY && SECRET_KEY);
 
-const client = iyzicoConfigured ? new Iyzipay({ apiKey: API_KEY, secretKey: SECRET_KEY, uri: BASE_URL }) : null;
+/** iyzico IYZWSv2 kimlik doğrulamalı POST isteği. */
+async function call(apiPath: string, body: Record<string, unknown>): Promise<Record<string, any>> {
+  if (!iyzicoConfigured) throw new Error("iyzico yapılandırılmamış (IYZICO_API_KEY / IYZICO_SECRET_KEY).");
+  const json = JSON.stringify(body);
+  const rnd = `${Date.now()}${randomBytes(8).toString("hex")}`;
+  const signature = createHmac("sha256", SECRET_KEY).update(rnd + apiPath + json).digest("hex");
+  const auth = Buffer.from(`apiKey:${API_KEY}&randomKey:${rnd}&signature:${signature}`).toString("base64");
 
-function call(resource: "checkoutFormInitialize" | "checkoutForm", method: "create" | "retrieve", req: Record<string, unknown>) {
-  return new Promise<Record<string, any>>((resolve, reject) => {
-    if (!client) return reject(new Error("iyzico yapılandırılmamış (IYZICO_API_KEY / IYZICO_SECRET_KEY)."));
-    client[resource][method](req, (err, result) => (err ? reject(err) : resolve(result)));
+  const res = await fetch(BASE_URL + apiPath, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json", Authorization: `IYZWSv2 ${auth}`, "x-iyzi-rnd": rnd },
+    body: json,
+    signal: AbortSignal.timeout(20_000),
   });
+  const data = (await res.json().catch(() => null)) as Record<string, any> | null;
+  if (!data) throw new Error(`iyzico geçersiz yanıt (HTTP ${res.status})`);
+  return data;
 }
+
+/** iyzico fiyat biçimi: 150 -> "150.0", 149.9 -> "149.9" */
+const fmtPrice = (n: number) => {
+  const s = String(n);
+  return s.includes(".") ? s : `${s}.0`;
+};
 
 const fmtDate = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace("T", " ");
 
@@ -53,18 +69,18 @@ export async function initializeCheckout(opts: {
 }): Promise<{ token: string; paymentPageUrl: string }> {
   const { order, user, ip, callbackUrl } = opts;
   const plan = PLANS[order.plan];
-  const price = String(order.price_try);
+  const price = fmtPrice(order.price_try);
   const { name, surname } = splitName(user.name);
   const address = { contactName: user.name, city: BUYER_CITY, country: BUYER_COUNTRY, address: BUYER_ADDRESS };
 
-  const result = await call("checkoutFormInitialize", "create", {
-    locale: Iyzipay.LOCALE.TR,
+  const result = await call("/payment/iyzipos/checkoutform/initialize/auth/ecom", {
+    locale: "tr",
     conversationId: order.id,
     price,
     paidPrice: price,
-    currency: Iyzipay.CURRENCY.TRY,
+    currency: "TRY",
     basketId: order.id,
-    paymentGroup: Iyzipay.PAYMENT_GROUP.SUBSCRIPTION,
+    paymentGroup: "SUBSCRIPTION",
     callbackUrl,
     enabledInstallments: [1],
     buyer: {
@@ -87,7 +103,7 @@ export async function initializeCheckout(opts: {
         name: `Akıncı AI ${plan.name} - 30 gün`,
         category1: "Yazılım",
         category2: "Abonelik",
-        itemType: Iyzipay.BASKET_ITEM_TYPE.VIRTUAL,
+        itemType: "VIRTUAL",
         price,
       },
     ],
@@ -106,8 +122,8 @@ export type VerifyResult = { ok: true; paymentId: string } | { ok: false; reason
 
 /** iyzico'dan ödeme sonucunu çeker ve siparişle birebir eşleştiğini doğrular. */
 export async function verifyCheckout(order: OrderRow, token: string): Promise<VerifyResult> {
-  const r = await call("checkoutForm", "retrieve", {
-    locale: Iyzipay.LOCALE.TR,
+  const r = await call("/payment/iyzipos/checkoutform/auth/ecom/detail", {
+    locale: "tr",
     conversationId: order.id,
     token,
   });

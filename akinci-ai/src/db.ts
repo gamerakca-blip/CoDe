@@ -49,11 +49,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS orders_token ON orders(provider_token);
 `);
 
+// Eski veritabanları için: rol kolonu (user | owner)
+const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+if (!userCols.some((c) => c.name === "role")) {
+  db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+}
+
 export interface UserRow {
   id: number;
   email: string;
   name: string;
   password_hash: string;
+  role: "user" | "owner";
   plan: PlanId;
   plan_expires_at: number | null;
   created_at: number;
@@ -76,8 +83,10 @@ const q = {
   userByEmail: db.prepare("SELECT * FROM users WHERE email = ?"),
   userById: db.prepare("SELECT * FROM users WHERE id = ?"),
   insertUser: db.prepare(
-    "INSERT INTO users (email, name, password_hash, created_at) VALUES (?, ?, ?, ?) RETURNING *",
+    "INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?) RETURNING *",
   ),
+  setPassword: db.prepare("UPDATE users SET password_hash = ? WHERE id = ?"),
+  deleteUserSessions: db.prepare("DELETE FROM sessions WHERE user_id = ?"),
   touchLogin: db.prepare("UPDATE users SET last_login_at = ? WHERE id = ?"),
   setPlan: db.prepare("UPDATE users SET plan = ?, plan_expires_at = ? WHERE id = ?"),
 
@@ -110,8 +119,10 @@ const q = {
 export const users = {
   byEmail: (email: string) => q.userByEmail.get(email) as UserRow | undefined,
   byId: (id: number) => q.userById.get(id) as UserRow | undefined,
-  create: (email: string, name: string, passwordHash: string) =>
-    q.insertUser.get(email, name, passwordHash, Date.now()) as unknown as UserRow,
+  create: (email: string, name: string, passwordHash: string, role: "user" | "owner" = "user") =>
+    q.insertUser.get(email, name, passwordHash, role, Date.now()) as unknown as UserRow,
+  setPassword: (id: number, hash: string) => q.setPassword.run(hash, id),
+  revokeSessions: (id: number) => q.deleteUserSessions.run(id),
   touchLogin: (id: number) => q.touchLogin.run(Date.now(), id),
 };
 
@@ -124,6 +135,8 @@ export const sessions = {
 
 /** Süresi dolmuş ücretli plan Free'ye düşer. */
 export function effectivePlan(user: UserRow, now = Date.now()): { plan: Plan; expiresAt: number | null } {
+  // Site sahibi her zaman Full planı süresiz kullanır.
+  if (user.role === "owner") return { plan: PLANS.full, expiresAt: null };
   if (user.plan !== "free" && user.plan_expires_at && user.plan_expires_at > now) {
     return { plan: PLANS[user.plan], expiresAt: user.plan_expires_at };
   }
