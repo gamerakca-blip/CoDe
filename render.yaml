@@ -15,6 +15,8 @@ services:
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: GEMINI_API_KEY
+        sync: false
       - key: OWNER_EMAILS
         sync: false
       - key: OWNER_SIGNUP_CODE

@@ -1,6 +1,6 @@
 # Akıncı AI
 
-Claude (Opus 5.5) tabanlı, akış (streaming) cevaplı web sohbet uygulaması. İki uzmanlık alanı vardır:
+Claude (Opus 5.5) veya Google Gemini ile çalışan, akış (streaming) cevaplı web sohbet uygulaması. İki uzmanlık alanı vardır:
 
 - **Kod yazma:** eksiksiz, çalıştırılabilir kod; renklendirilmiş kod blokları, kopyalama ve dosya olarak indirme
 - **Osmanlı:** tarih, kurumlar, kültür; Osmanlı Türkçesi transkripsiyonu, sadeleştirme ve kelime kökenleri; Hicri/Rumi → Miladi tarih karşılıkları
@@ -13,6 +13,17 @@ Claude (Opus 5.5) tabanlı, akış (streaming) cevaplı web sohbet uygulaması. 
 | 30 sn hareketsiz | Uyur (gözler kapalı, Zzz, fincan yerde) |
 | Model düşünüyor | Laptop başında, gözler yukarıda, düşünce noktaları |
 | Cevap yazılıyor | Laptopta hızlı yazar, ekrandan bitler yükselir |
+
+## Yapay zeka sağlayıcısı
+
+| Ayar | Sağlayıcı | Not |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Claude Opus 5.5 | Ücretli; en iyi kalite. Planlara göre düşünme seviyesi değişir. |
+| `GEMINI_API_KEY` | Google Gemini (`gemini-3.8-flash`) | Ücretsiz katmanı var; dakika/gün istek sınırı uygulanır. Ücretsiz katmanda Google verileri model geliştirmek için kullanabilir. |
+
+Yalnızca biri doluysa o kullanılır; ikisi de doluysa Claude. `AI_PROVIDER=gemini` veya `claude` ile zorlanabilir.
+Gemini'de planlar mesaj kotası ve cevap uzunluğuyla ayrışır (düşünme seviyesi ayarı Claude'a özeldir).
+Ücretsiz Gemini anahtarı: https://aistudio.google.com/apikey
 
 ## Abonelik planları
 
@@ -112,7 +123,7 @@ Tüm değişkenler açıklamalarıyla `.env.example` içinde. En önemlileri:
 
 | Değişken | Açıklama |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic API anahtarı (zorunlu) |
+| `ANTHROPIC_API_KEY` veya `GEMINI_API_KEY` | yapay zeka anahtarı (biri zorunlu) |
 | `IYZICO_API_KEY`, `IYZICO_SECRET_KEY` | iyzico anahtarları (satın alma için zorunlu) |
 | `IYZICO_BASE_URL` | sandbox veya canlı iyzico adresi |
 | `PUBLIC_BASE_URL` | canlıda sitenin dış adresi |
@@ -127,6 +138,7 @@ Tüm değişkenler açıklamalarıyla `.env.example` içinde. En önemlileri:
 - `src/payments/iyzico.ts` — iyzico ödeme formu başlatma ve doğrulama
 - `src/make-owner.ts` — kayıtlı hesabı site sahibi yapan komut
 - `legal/` — yasal sayfa şablonları (`/yasal/...`)
+- `src/providers/` — Claude ve Gemini sağlayıcıları
 - `src/prompt.ts` — Akıncı'nın sistem talimatı (kod + Osmanlı)
 - `public/` — arayüz: `app.js` (sohbet), `account.js` (giriş, planlar), `mascot.js`, `markdown.js`, `sw.js` (PWA)
 

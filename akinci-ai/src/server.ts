@@ -1,12 +1,12 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import helmet from "helmet";
-import Anthropic from "@anthropic-ai/sdk";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SYSTEM_PROMPT } from "./prompt.js";
+import { createClaudeProvider } from "./providers/claude.js";
+import { createGeminiProvider } from "./providers/gemini.js";
 import { PAID_PLANS, PLANS, isPlanId, todayKey } from "./plans.js";
 import { effectivePlan, orders, sessions as dbSessions, usage, users, type UserRow } from "./db.js";
 import { currentUser, endSession, hashPassword, rateLimit, requireUser, sameOrigin, startSession, verifyPassword } from "./auth.js";
@@ -14,7 +14,6 @@ import { iyzicoConfigured, initializeCheckout, verifyCheckout } from "./payments
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? "0.0.0.0";
-const MODEL = process.env.AKINCI_MODEL ?? "claude-opus-5-5";
 const PAYMENT_MODE = process.env.PAYMENT_MODE === "demo" ? "demo" : "iyzico";
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? process.env.RENDER_EXTERNAL_URL)?.replace(/\/+$/, "");
 const CHAT_TTL_MS = 6 * 60 * 60 * 1000;
@@ -31,12 +30,20 @@ function secretEquals(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb);
 }
 
-const client = new Anthropic();
+// Yapay zeka sağlayıcısı: AI_PROVIDER=claude|gemini. Boşsa hangi anahtar varsa o seçilir (ikisi de varsa Claude).
+const PROVIDER_ID =
+  process.env.AI_PROVIDER === "gemini" || process.env.AI_PROVIDER === "claude"
+    ? process.env.AI_PROVIDER
+    : !process.env.ANTHROPIC_API_KEY && process.env.GEMINI_API_KEY
+      ? "gemini"
+      : "claude";
+const provider = PROVIDER_ID === "gemini" ? createGeminiProvider() : createClaudeProvider();
+const MODEL = provider.model;
 
 // ---------- sohbet oturumları (bellekte) ----------
 interface ChatSession {
   userId: number;
-  messages: Anthropic.Beta.BetaMessageParam[];
+  history: unknown;
   busy: boolean;
   touchedAt: number;
 }
@@ -47,20 +54,6 @@ setInterval(() => {
   for (const [id, s] of chats) if (!s.busy && s.touchedAt < cutoff) chats.delete(id);
   dbSessions.purge();
 }, 10 * 60 * 1000).unref();
-
-/**
- * After a server-side fallback, model-internal blocks that precede the last
- * `fallback` block must not be echoed back; the fallback block itself stays
- * in place. Everything after it is kept as-is.
- */
-function contentForHistory(content: Anthropic.Beta.BetaContentBlock[]): Anthropic.Beta.BetaContentBlockParam[] {
-  let lastFallback = -1;
-  content.forEach((b, i) => {
-    if (b.type === "fallback") lastFallback = i;
-  });
-  return content.filter((b, i) => i >= lastFallback || b.type === "text" || b.type === "fallback") as
-    Anthropic.Beta.BetaContentBlockParam[];
-}
 
 function accountView(user: UserRow) {
   const { plan, expiresAt } = effectivePlan(user);
@@ -303,7 +296,7 @@ const chatLimiter = rateLimit({
 
 app.post("/api/session", requireUser, (req, res) => {
   const id = randomUUID();
-  chats.set(id, { userId: req.user!.id, messages: [], busy: false, touchedAt: Date.now() });
+  chats.set(id, { userId: req.user!.id, history: provider.newHistory(), busy: false, touchedAt: Date.now() });
   res.json({ sessionId: id });
 });
 
@@ -344,7 +337,6 @@ app.post("/api/chat", requireUser, chatLimiter, async (req: Request, res: Respon
 
   chat.busy = true;
   chat.touchedAt = Date.now();
-  chat.messages.push({ role: "user", content: text });
 
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -356,55 +348,31 @@ app.post("/api/chat", requireUser, chatLimiter, async (req: Request, res: Respon
     if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  const stream = client.beta.messages.stream({
-    model: MODEL,
-    max_tokens: plan.maxTokens,
-    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-    messages: chat.messages,
-    output_config: { effort: plan.effort },
-    cache_control: { type: "ephemeral" },
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-  });
-
+  const abort = new AbortController();
   let clientGone = false;
   res.on("close", () => {
     if (!res.writableFinished) {
       clientGone = true;
-      stream.abort();
+      abort.abort();
     }
   });
 
   const quota = () => ({ used: usage.get(user.id, day), limit: plan.dailyMessages });
 
   try {
-    for await (const event of stream) {
-      if (event.type === "content_block_start") {
-        const kind = event.content_block.type;
-        if (kind === "thinking" || kind === "redacted_thinking") send("phase", { phase: "thinking" });
-        else if (kind === "text") send("phase", { phase: "writing" });
-        else if (kind === "fallback") send("fallback", { to: event.content_block.to.model });
-      } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        send("text", { text: event.delta.text });
-      }
-    }
-
-    const final = await stream.finalMessage();
-    if (final.stop_reason === "refusal") {
-      chat.messages.pop();
+    const result = await provider.runTurn({ history: chat.history, text, plan, send, signal: abort.signal });
+    if (result.kind === "refusal") {
       usage.refund(user.id, day);
-      send("refusal", { category: final.stop_details?.category ?? null, quota: quota() });
+      send("refusal", { category: result.category, quota: quota() });
     } else {
-      chat.messages.push({ role: "assistant", content: contentForHistory(final.content) });
-      send("done", { stopReason: final.stop_reason, quota: quota() });
+      send("done", { stopReason: result.stopReason, quota: quota() });
     }
   } catch (err) {
-    chat.messages.pop();
     if (!clientGone) {
       // Sağlayıcı kaynaklı hatada hak iade edilir; kullanıcının durdurduğu tur sayılır.
       usage.refund(user.id, day);
       console.error(err);
-      send("error", { message: describeError(err), quota: quota() });
+      send("error", { message: provider.describeError(err) ?? "Beklenmeyen bir hata oluştu.", quota: quota() });
     }
   } finally {
     chat.busy = false;
@@ -451,19 +419,8 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: "Sunucu hatası." });
 });
 
-function describeError(err: unknown): string {
-  if (err instanceof Anthropic.AuthenticationError) return "Sunucunun API anahtarı geçersiz veya eksik.";
-  if (err instanceof Anthropic.PermissionDeniedError) return "Bu modele erişim izni yok.";
-  if (err instanceof Anthropic.RateLimitError) return "Hız sınırına takıldı. Biraz bekleyip tekrar dene.";
-  if (err instanceof Anthropic.BadRequestError) return `Geçersiz istek: ${err.message}`;
-  if (err instanceof Anthropic.InternalServerError) return "Sağlayıcı tarafında geçici hata. Tekrar dene.";
-  if (err instanceof Anthropic.APIConnectionError) return "Sunucuya bağlanılamadı.";
-  if (err instanceof Anthropic.APIError) return `API hatası (${err.status}): ${err.message}`;
-  return "Beklenmeyen bir hata oluştu.";
-}
-
 app.listen(PORT, HOST, () => {
-  console.log(`Akıncı AI hazır: http://localhost:${PORT}  (model: ${MODEL}, ödeme: ${PAYMENT_MODE})`);
+  console.log(`Akıncı AI hazır: http://localhost:${PORT}  (yapay zeka: ${provider.id} / ${MODEL}, ödeme: ${PAYMENT_MODE})`);
   for (const nets of Object.values(networkInterfaces())) {
     for (const n of nets ?? []) {
       if (n.family === "IPv4" && !n.internal) console.log(`  Telefondan (aynı Wi-Fi): http://${n.address}:${PORT}`);
@@ -474,6 +431,8 @@ app.listen(PORT, HOST, () => {
     if (u && u.role !== "owner") console.warn(`  UYARI: ${email} sıradan kullanıcı olarak kayıtlı; sahip yetkisi verilmedi.`);
     if (!u && !OWNER_SIGNUP_CODE) console.warn(`  UYARI: ${email} sahip hesabı için OWNER_SIGNUP_CODE ayarlanmamış.`);
   }
+  if (provider.id === "claude" && !process.env.ANTHROPIC_API_KEY) console.warn("  UYARI: ANTHROPIC_API_KEY yok — sohbet çalışmaz. Ücretsiz deneme için GEMINI_API_KEY kullanabilirsin.");
+  if (provider.id === "gemini" && !process.env.GEMINI_API_KEY) console.warn("  UYARI: GEMINI_API_KEY yok — sohbet çalışmaz.");
   if (PAYMENT_MODE === "demo") console.warn("  UYARI: PAYMENT_MODE=demo — planlar ödeme alınmadan açılır. Canlıda kullanma.");
   else if (!iyzicoConfigured) console.warn("  UYARI: IYZICO_API_KEY / IYZICO_SECRET_KEY eksik — satın alma kapalı.");
 });
