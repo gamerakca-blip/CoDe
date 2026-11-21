@@ -1,0 +1,706 @@
+<title>Akıncı AI</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: tek ekranlık sohbet uygulaması; masaüstünde solda maskot masası, telefonda üstte ince bant. Bilerek tek (koyu) tema: logonun gece ekranı. */
+:root {
+  --bg: #07090e; --bg-2: #0d1018; --panel: #121621; --panel-2: #181d2a; --line: #232a3a;
+  --text: #e6e8ee; --muted: #8b93a7; --blue: #0b6bff; --blue-2: #3d8bff; --red: #d0262d; --code-bg: #0b0e15;
+  --pixel: "Press Start 2P", ui-monospace, monospace;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font: 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+.app { display: grid; grid-template-columns: 270px 1fr; height: 100%; }
+.sidebar { display: flex; flex-direction: column; gap: 18px; padding-block: 22px; padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: 18px; background: var(--bg-2); border-right: 1px solid var(--line); min-height: 0; }
+.brand { font-family: var(--pixel); font-size: 17px; letter-spacing: 1px; }
+.brand-ai { color: var(--blue-2); margin-left: 8px; }
+.desk { display: flex; flex-direction: column; align-items: center; padding: 22px 12px 14px; background: radial-gradient(120% 90% at 50% 20%, #141a2a 0%, var(--panel) 70%); border: 1px solid var(--line); border-radius: 10px; }
+.desk-floor { width: 85%; height: 4px; margin-top: -6px; background: var(--line); border-radius: 2px; }
+.status { margin: 12px 0 0; font-family: var(--pixel); font-size: 9px; color: var(--muted); text-align: center; }
+.side-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.side-note strong { color: var(--text); font-weight: 600; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: transparent; padding: 10px 14px; }
+.btn:hover { background: var(--panel-2); border-color: #33405a; }
+.btn:focus-visible, .chip:focus-visible, .seg button:focus-visible, textarea:focus-visible { outline: 2px solid var(--blue-2); outline-offset: 2px; }
+.btn-icon { width: 40px; height: 40px; padding: 0; font-size: 20px; flex: none; }
+
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.seg button { border: 0; background: none; border-radius: 7px; padding: 7px 4px; font-size: 13px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); }
+.seg-label { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { display: none; }
+.chat { flex: 1; overflow-y: auto; padding-block: 28px 12px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.notice { max-width: 780px; margin: 0 auto 18px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(208,38,45,.45); background: rgba(208,38,45,.12); font-size: 14px; }
+.empty { max-width: 720px; margin: 6vh auto 0; text-align: center; }
+.empty-title { font-family: var(--pixel); font-size: 20px; line-height: 1.6; margin: 0 0 12px; text-wrap: balance; }
+.empty-sub { color: var(--muted); margin: 0 0 8px; }
+.chips-label { margin: 18px 0 10px; font-family: var(--pixel); font-size: 9px; color: var(--muted); letter-spacing: .5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 8px 14px; font-size: 14px; text-align: left; }
+.chip:hover { border-color: var(--blue); }
+
+.messages { list-style: none; margin: 0 auto; padding: 0; max-width: 780px; display: flex; flex-direction: column; gap: 22px; }
+.msg { display: flex; gap: 12px; }
+.msg-user { justify-content: flex-end; }
+.msg-user .bubble { background: var(--blue); color: #fff; border-radius: 14px 14px 4px 14px; padding: 10px 14px; max-width: 85%; white-space: pre-wrap; overflow-wrap: anywhere; }
+.avatar { flex: none; width: 34px; height: 34px; }
+.col { min-width: 0; flex: 1; }
+.body { overflow-wrap: anywhere; }
+.body > :first-child { margin-top: 4px; }
+.body > :last-child { margin-bottom: 0; }
+.thinking { color: var(--muted); font-size: 14px; }
+.thinking::after { content: ""; display: inline-block; width: 1.2em; text-align: left; animation: dots 1.2s steps(4) infinite; }
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+.msg-note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+.msg-note.err { color: #ff8a8f; }
+.cursor::after { content: ""; display: inline-block; width: 8px; height: 15px; margin-left: 2px; vertical-align: -2px; background: var(--blue-2); animation: caret 1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+
+.body h1, .body h2, .body h3 { line-height: 1.3; margin: 18px 0 8px; text-wrap: balance; }
+.body h1 { font-size: 20px; } .body h2 { font-size: 18px; } .body h3 { font-size: 16px; }
+.body p { margin: 0 0 12px; }
+.body ul, .body ol { margin: 0 0 12px; padding-left: 22px; }
+.body li { margin: 3px 0; }
+.body a { color: var(--blue-2); }
+.body blockquote { margin: 0 0 12px; padding: 4px 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.body hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+.body code { font-family: var(--mono); font-size: 13px; font-variant-ligatures: none; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+.body table { border-collapse: collapse; margin: 0 0 12px; display: block; overflow-x: auto; max-width: 100%; }
+.body th, .body td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+.body th { background: var(--panel); }
+.codeblock { margin: 0 0 12px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--code-bg); }
+.codeblock-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; font: 12px var(--mono); color: var(--muted); background: var(--panel); border-bottom: 1px solid var(--line); }
+.codeblock-head button { border: 0; background: none; color: var(--muted); font-size: 12px; padding: 2px 6px; }
+.codeblock-head button:hover { color: var(--text); }
+.codeblock pre { margin: 0; padding: 12px 14px; overflow-x: auto; }
+.codeblock code { background: none; padding: 0; font-size: 13px; line-height: 1.55; }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: #ff7b72; }
+.hljs-string, .hljs-attr .hljs-string, .hljs-regexp { color: #a5d6ff; }
+.hljs-title, .hljs-title.function_, .hljs-section { color: #d2a8ff; }
+.hljs-number, .hljs-literal, .hljs-attr, .hljs-variable, .hljs-template-variable { color: #79c0ff; }
+.hljs-comment, .hljs-quote { color: #8b949e; font-style: italic; }
+.hljs-type, .hljs-title.class_, .hljs-params { color: #ffa657; }
+.hljs-meta, .hljs-symbol { color: #7ee787; }
+
+.composer { padding-block: 10px calc(16px + env(safe-area-inset-bottom, 0px)); padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.composer-box { max-width: 780px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 8px; }
+.composer-box:focus-within { border-color: var(--blue); }
+textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--text); font: 16px/1.5 var(--sans); padding: 8px 6px; max-height: 200px; }
+textarea::placeholder { color: var(--muted); }
+.btn-send, .btn-stop { width: 40px; height: 40px; padding: 0; border: 0; border-radius: 10px; color: #fff; flex: none; }
+.btn-send { background: var(--blue); }
+.btn-send:hover { background: var(--blue-2); }
+.btn-send:disabled { background: var(--panel-2); color: var(--muted); cursor: not-allowed; }
+.btn-stop { background: var(--red); }
+.hint { max-width: 780px; margin: 6px auto 0; font-size: 12px; color: var(--muted); text-align: center; }
+
+/* ---------- mascot ---------- */
+.mascot { display: block; }
+.mascot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.mascot-lg { width: 176px; height: 154px; }
+.mascot-sm { width: 52px; height: 46px; flex: none; }
+
+.mascot .m-cup, .mascot .m-cup-floor, .mascot .m-laptop, .mascot .m-think,
+.mascot .m-zzz, .mascot .m-eyes-closed, .mascot .m-glow, .mascot .m-bit { display: none; }
+
+.mascot g, .mascot rect { transform-box: fill-box; }
+
+/* coffee: kahve içer */
+.mascot[data-state="coffee"] .m-cup { display: inline; }
+.mascot[data-state="coffee"] .m-body { animation: bob 2.4s steps(2) infinite; }
+.mascot[data-state="coffee"] .m-cup { transform-origin: 0% 50%; animation: sip 7s ease-in-out infinite; }
+.mascot .m-steam rect { animation: steam 2.2s steps(4) infinite; }
+.mascot .m-steam .s2 { animation-delay: .7s; }
+.mascot .m-steam .s3 { animation-delay: 1.4s; }
+
+/* sleep: uyur */
+.mascot[data-state="sleep"] .m-eyes-open { display: none; }
+.mascot[data-state="sleep"] .m-eyes-closed,
+.mascot[data-state="sleep"] .m-zzz,
+.mascot[data-state="sleep"] .m-cup-floor { display: inline; }
+.mascot[data-state="sleep"] .m-body { transform-origin: 50% 100%; animation: breathe 3.2s ease-in-out infinite; }
+.mascot .m-zzz > g { animation: zzz 3.6s linear infinite; opacity: 0; }
+.mascot .m-zzz .z2 { animation-delay: 1.2s; }
+.mascot .m-zzz .z3 { animation-delay: 2.4s; }
+
+/* thinking / writing: laptopta çalışır */
+.mascot[data-state="thinking"] .m-laptop,
+.mascot[data-state="writing"] .m-laptop,
+.mascot[data-state="thinking"] .m-glow,
+.mascot[data-state="writing"] .m-glow { display: inline; }
+.mascot[data-state="thinking"] .m-think { display: inline; }
+.mascot[data-state="writing"] .m-bit { display: inline; }
+.mascot .m-glow { opacity: .1; animation: glow 1.6s steps(3) infinite; }
+
+.mascot[data-state="thinking"] .m-eyes-open .m-eye { animation: look-around 3s steps(1) infinite; }
+.mascot .m-think rect { animation: dot 1.2s steps(1) infinite; opacity: .2; }
+.mascot .m-think .d2 { animation-delay: .2s; }
+.mascot .m-think .d3 { animation-delay: .4s; }
+
+.mascot[data-state="writing"] .m-eyes-open .m-eye { animation: read 1.8s steps(1) infinite; }
+.mascot[data-state="writing"] .m-paw { animation: type .28s steps(1) infinite; }
+.mascot[data-state="writing"] .m-paw.p2 { animation-delay: .14s; }
+.mascot .m-bit { animation: bit 1.4s steps(5) infinite; }
+.mascot .m-bit.b2 { animation-delay: .45s; }
+.mascot .m-bit.b3 { animation-delay: .9s; }
+.mascot[data-state="thinking"] .m-paw { transform: translateY(0.2px); }
+
+/* göz kırpma (uyumuyorken) */
+.mascot:not([data-state="sleep"]) .m-eyes-open { transform-origin: 50% 70%; animation: blink 4.5s steps(1) infinite; }
+
+/* uyanma zıplaması */
+.mascot.waking svg { animation: wake .5s steps(4) 1; }
+
+@keyframes bob { 50% { transform: translateY(-0.3px); } }
+@keyframes sip {
+  0%, 68%, 100% { transform: none; }
+  74%, 86% { transform: translate(-1.6px, -2.6px) rotate(-28deg); }
+}
+@keyframes steam {
+  0% { transform: translateY(0); opacity: 0; }
+  25% { opacity: .9; }
+  100% { transform: translateY(-2.4px); opacity: 0; }
+}
+@keyframes breathe { 50% { transform: scaleY(1.035) scaleX(1.01); } }
+@keyframes zzz {
+  0% { opacity: 0; transform: translate(0, 0); }
+  15% { opacity: 1; }
+  80% { opacity: .8; }
+  100% { opacity: 0; transform: translate(0.8px, -2px); }
+}
+@keyframes glow { 50% { opacity: .18; } }
+@keyframes look-around {
+  0% { transform: translate(0, -0.5px); }
+  33% { transform: translate(0.5px, -0.5px); }
+  66% { transform: translate(-0.5px, -0.5px); }
+}
+@keyframes read {
+  0% { transform: translate(-0.5px, 0.3px); }
+  50% { transform: translate(0.5px, 0.3px); }
+}
+@keyframes dot { 0% { opacity: 1; } 50% { opacity: .2; } }
+@keyframes type { 50% { transform: translateY(-0.6px); } }
+@keyframes bit {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-6px); opacity: 0; }
+}
+@keyframes blink { 0%, 94% { transform: none; } 95%, 98% { transform: scaleY(0.15); } }
+@keyframes wake { 0%, 100% { transform: none; } 50% { transform: translateY(-6%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot *, .mascot svg { animation: none !important; }
+  .mascot[data-state="sleep"] .m-zzz > g { opacity: 1; }
+}
+
+
+
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
+  .sidebar { display: none; }
+  .topbar { display: flex; align-items: center; gap: 8px; padding-block: 8px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--line); background: var(--bg-2); }
+  .topbar-text { flex: 1; min-width: 0; font-family: var(--pixel); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-text .brand-ai { margin-left: 6px; }
+  .status-sm { display: block; margin-top: 6px; font-size: 8px; color: var(--muted); }
+  .topbar .seg { grid-template-columns: repeat(3, auto); padding: 3px; }
+  .topbar .seg button { padding: 5px 6px; font-size: 12px; }
+  .mascot-sm { width: 44px; height: 39px; }
+  .chat { padding-block: 18px 10px; }
+  .empty { margin-top: 3vh; }
+  .empty-title { font-size: 15px; }
+  .msg-user .bubble { max-width: 92%; }
+  .hint { display: none; }
+}
+@media (max-width: 420px) { .topbar .status-sm { display: none; } }
+</style>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">AKINCI<span class="brand-ai">AI</span></div>
+    <div class="desk">
+      <div class="mascot mascot-lg" data-state="coffee" aria-hidden="true"></div>
+      <div class="desk-floor"></div>
+      <p class="status" id="status" aria-live="polite">Kahve içiyor</p>
+    </div>
+    <button class="btn" id="newChat" type="button">+ Yeni sohbet</button>
+    <div>
+      <p class="seg-label">Cevap modu</p>
+      <div class="seg" id="segDesk" role="group" aria-label="Cevap modu">
+        <button type="button" data-tier="quick">Hızlı</button>
+        <button type="button" data-tier="default">Normal</button>
+        <button type="button" data-tier="complex">Derin</button>
+      </div>
+    </div>
+    <p class="side-note">Kod yazar, hata ayıklar; Osmanlı tarihini ve Osmanlıcayı anlatır. Cevaplar <strong>kendi Claude hesabınla</strong> üretilir; ilk soruda izin istenir.</p>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="mascot mascot-sm" data-state="coffee" aria-hidden="true"></div>
+      <div class="topbar-text">AKINCI<span class="brand-ai">AI</span><span class="status-sm" id="statusSm">Kahve içiyor</span></div>
+      <div class="seg" id="segMobile" role="group" aria-label="Cevap modu">
+        <button type="button" data-tier="quick">Hızlı</button>
+        <button type="button" data-tier="default">Normal</button>
+        <button type="button" data-tier="complex">Derin</button>
+      </div>
+      <button class="btn btn-icon" id="newChatSm" type="button" aria-label="Yeni sohbet">+</button>
+    </header>
+
+    <section class="chat" id="chat">
+      <div class="notice" id="notice" hidden></div>
+      <div class="empty" id="empty">
+        <h1 class="empty-title">Ne yazalım?</h1>
+        <p class="empty-sub">Kod iste, hata ayıklat ya da Osmanlı hakkında sor.</p>
+        <p class="chips-label">KOD</p>
+        <div class="chips">
+          <button class="chip" type="button">Python ile klasördeki dosyaları tarihe göre yeniden adlandıran betik yaz</button>
+          <button class="chip" type="button">JavaScript'te debounce ve throttle farkını örnekle göster</button>
+          <button class="chip" type="button">SQL'de en çok satan 5 ürünü bulan sorgu yaz</button>
+        </div>
+        <p class="chips-label">OSMANLI</p>
+        <div class="chips">
+          <button class="chip" type="button">Kanuni Sultan Süleyman dönemini ana hatlarıyla anlat</button>
+          <button class="chip" type="button">"Devlet-i Aliyye-i Osmaniyye" ne demek, kelimelerin kökeni ne?</button>
+          <button class="chip" type="button">Hicri 1071 yılı Miladi kaçtır, nasıl hesaplanır?</button>
+        </div>
+      </div>
+      <ol class="messages" id="messages"></ol>
+    </section>
+
+    <form class="composer" id="composer">
+      <div class="composer-box">
+        <textarea id="input" rows="1" placeholder="Kod iste veya Osmanlı hakkında sor…" autocomplete="off" enterkeyhint="send" aria-label="Mesaj"></textarea>
+        <button class="btn-send" id="send" type="submit" aria-label="Gönder">
+          <svg viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M3 0h2v1h1v1h1v1h1v1H5v4H3V4H0V3h1V2h1V1h1z"/></svg>
+        </button>
+        <button class="btn-stop" id="stop" type="button" aria-label="Durdur" hidden>
+          <svg viewBox="0 0 8 8" width="14" height="14" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 1h6v6H1z"/></svg>
+        </button>
+      </div>
+      <p class="hint">Enter gönderir · Shift+Enter yeni satır</p>
+    </form>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+(() => {
+// Akıncı maskotu: pikselli mavi karakter + fes.
+// Durumlar: coffee (boşta, kahve içer), sleep (uzun süre boşta), thinking, writing (laptopta çalışır).
+
+const Z = "M0 0h4v1h-4zM2 1h1v1h-1zM1 2h1v1h-1zM0 3h4v1h-4z";
+
+const SVG = `
+<svg viewBox="-1 -3 24 21" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">
+  <g class="m-shadow"><rect x="5" y="16.4" width="12" height="0.6" fill="#000" opacity="0.35"/></g>
+
+  <!-- yerdeki soğumuş kahve (uyurken) -->
+  <g class="m-cup-floor">
+    <rect x="18.5" y="14.2" width="2.2" height="2.3" fill="#efe9de"/>
+    <rect x="18.5" y="14.2" width="2.2" height="0.4" fill="#5a3418"/>
+    <rect x="20.7" y="14.7" width="0.5" height="1.2" fill="#efe9de"/>
+  </g>
+
+  <g class="m-body">
+    <g class="m-legs">
+      <rect x="8" y="15" width="1.5" height="1.5" fill="#0b6bff"/>
+      <rect x="12" y="15" width="2" height="1.5" fill="#0b6bff"/>
+    </g>
+    <rect x="5" y="6" width="11" height="1" fill="#0b6bff"/>
+    <rect x="5" y="7" width="12" height="7" fill="#0b6bff"/>
+    <rect x="6" y="14" width="10" height="1" fill="#0b6bff"/>
+    <rect x="5" y="7" width="1" height="7" fill="#0957cf"/>
+    <rect x="16" y="7" width="1" height="7" fill="#3d8bff"/>
+
+    <g class="m-fez">
+      <rect x="8" y="1" width="3.5" height="1" fill="#d0262d"/>
+      <rect x="12.5" y="1" width="1.5" height="1" fill="#d0262d"/>
+      <rect x="7" y="2" width="8" height="4" fill="#d0262d"/>
+      <rect x="7" y="5.4" width="8" height="0.6" fill="#a51c22"/>
+      <g class="m-tassel">
+        <rect x="11.5" y="1" width="1" height="1.6" fill="#0a0c12"/>
+        <rect x="12" y="2.6" width="1.5" height="1.6" fill="#0a0c12"/>
+      </g>
+    </g>
+
+    <rect class="m-glow" x="5" y="6" width="12" height="6" fill="#7fd3ff"/>
+
+    <g class="m-eyes-open">
+      <g class="m-eye"><rect x="8" y="10.5" width="1.5" height="1" fill="#0a0c12"/><rect x="8.5" y="10" width="0.5" height="0.5" fill="#0a0c12"/></g>
+      <g class="m-eye"><rect x="12.5" y="10.5" width="1.5" height="1" fill="#0a0c12"/><rect x="13" y="10" width="0.5" height="0.5" fill="#0a0c12"/></g>
+    </g>
+    <g class="m-eyes-closed">
+      <rect x="8" y="11" width="1.5" height="0.4" fill="#0a0c12"/>
+      <rect x="12.5" y="11" width="1.5" height="0.4" fill="#0a0c12"/>
+    </g>
+  </g>
+
+  <!-- kahve fincanı (boşta) -->
+  <g class="m-cup">
+    <rect x="17" y="11" width="1.2" height="1" fill="#0b6bff"/>
+    <rect x="18" y="10" width="2.5" height="3" fill="#efe9de"/>
+    <rect x="18" y="12.4" width="2.5" height="0.6" fill="#cfc6b6"/>
+    <rect x="18" y="10" width="2.5" height="0.5" fill="#6b3e1f"/>
+    <rect x="20.5" y="10.7" width="0.8" height="0.4" fill="#efe9de"/>
+    <rect x="21" y="10.7" width="0.4" height="1.6" fill="#efe9de"/>
+    <rect x="20.5" y="11.9" width="0.8" height="0.4" fill="#efe9de"/>
+    <g class="m-steam">
+      <rect class="s1" x="18.6" y="8.6" width="0.4" height="0.8" fill="#c9d3e6"/>
+      <rect class="s2" x="19.5" y="8" width="0.4" height="0.8" fill="#c9d3e6"/>
+      <rect class="s3" x="18.9" y="7.2" width="0.4" height="0.6" fill="#c9d3e6"/>
+    </g>
+  </g>
+
+  <!-- laptop (çalışırken) -->
+  <g class="m-laptop">
+    <rect class="m-bit b1" x="7" y="11" width="0.5" height="0.5" fill="#7fd3ff"/>
+    <rect class="m-bit b2" x="11" y="11" width="0.5" height="0.5" fill="#7fd3ff"/>
+    <rect class="m-bit b3" x="14.5" y="11" width="0.5" height="0.5" fill="#ffd166"/>
+    <rect x="4" y="12" width="14" height="4.3" fill="#2b303c"/>
+    <rect x="4" y="12" width="14" height="0.4" fill="#4a5163"/>
+    <rect x="10" y="13.5" width="2" height="1.2" fill="#d0262d"/>
+    <rect x="11" y="13.2" width="0.5" height="0.4" fill="#0a0c12"/>
+    <rect x="2.5" y="16.3" width="17" height="0.7" fill="#8a91a3"/>
+    <rect class="m-paw p1" x="3.2" y="15.4" width="1.2" height="0.9" fill="#0b6bff"/>
+    <rect class="m-paw p2" x="17.6" y="15.4" width="1.2" height="0.9" fill="#0b6bff"/>
+  </g>
+
+  <!-- düşünce noktaları -->
+  <g class="m-think">
+    <rect class="d1" x="16.5" y="1" width="1" height="1" fill="#e6e8ee"/>
+    <rect class="d2" x="18.3" y="1" width="1" height="1" fill="#e6e8ee"/>
+    <rect class="d3" x="20.1" y="1" width="1" height="1" fill="#e6e8ee"/>
+  </g>
+
+  <!-- Zzz -->
+  <g class="m-zzz" fill="#e6e8ee">
+    <g class="z1"><path d="${Z}" transform="translate(17.6 5.6) scale(0.45)"/></g>
+    <g class="z2"><path d="${Z}" transform="translate(19.2 2.4) scale(0.6)"/></g>
+    <g class="z3"><path d="${Z}" transform="translate(21 -1.4) scale(0.75)"/></g>
+  </g>
+</svg>`;
+
+const STATUS_TEXT = {
+  coffee: "Kahve içiyor",
+  sleep: "Uyuyor… zzz",
+  thinking: "Düşünüyor…",
+  writing: "Laptopta yazıyor…",
+};
+
+function createMascots(selector, onChange) {
+  const nodes = [...document.querySelectorAll(selector)];
+  for (const n of nodes) n.innerHTML = SVG;
+
+  let current = null;
+  function set(state) {
+    if (state === current) return;
+    const waking = current === "sleep" && state !== "sleep";
+    current = state;
+    for (const n of nodes) {
+      n.dataset.state = state;
+      if (waking) {
+        n.classList.remove("waking");
+        void n.offsetWidth;
+        n.classList.add("waking");
+      }
+    }
+    onChange?.(state);
+  }
+  return { set, get: () => current };
+}
+
+
+// Küçük, güvenli Markdown işleyici: önce HTML kaçırılır, sonra sınırlı sözdizimi uygulanır.
+// Kod blokları highlight.js yüklüyse renklendirilir (hljs çıktısı zaten HTML-kaçırılmıştır).
+
+function highlight(code, lang) {
+  const hljs = globalThis.hljs;
+  if (hljs && lang && hljs.getLanguage(lang)) {
+    try {
+      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+    } catch {}
+  }
+  return null;
+}
+
+const esc = (s) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+function inline(text) {
+  const codes = [];
+  let s = text.replace(/`([^`\n]+)`/g, (_, c) => {
+    codes.push(c);
+    return `\u0000${codes.length - 1}\u0000`;
+  });
+  s = esc(s);
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, url) =>
+    `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, "$1<em>$2</em>");
+  s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${esc(codes[Number(i)])}</code>`);
+}
+
+function table(lines) {
+  const cells = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const head = cells(lines[0]);
+  const rows = lines.slice(2).map(cells);
+  return `<table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${rows
+    .map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`)
+    .join("")}</tbody></table>`;
+}
+
+function renderMarkdown(src) {
+  const lines = src.replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    const fence = line.match(/^\s*```\s*([\w+#.-]*)\s*$/);
+    if (fence) {
+      const lang = fence[1];
+      const body = [];
+      i++;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) body.push(lines[i++]);
+      i++;
+      const code = body.join("\n");
+      out.push(
+        `<div class="codeblock" data-lang="${esc(lang)}"><div class="codeblock-head"><span>${esc(lang || "kod")}</span><span class="codeblock-actions"><button type="button" data-copy>Kopyala</button></span></div><pre><code class="hljs">${highlight(code, lang) ?? esc(code)}</code></pre></div>`,
+      );
+      continue;
+    }
+
+    if (!line.trim()) { i++; continue; }
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      const level = Math.min(h[1].length, 3);
+      out.push(`<h${level}>${inline(h[2])}</h${level}>`);
+      i++;
+      continue;
+    }
+
+    if (/^\s*(?:(?:-\s*){3,}|(?:\*\s*){3,}|(?:_\s*){3,})$/.test(line)) { out.push("<hr>"); i++; continue; }
+
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-+/.test(lines[i + 1])) {
+      const block = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) block.push(lines[i++]);
+      out.push(table(block));
+      continue;
+    }
+
+    if (/^\s*>/.test(line)) {
+      const block = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) block.push(lines[i++].replace(/^\s*>\s?/, ""));
+      out.push(`<blockquote>${renderMarkdown(block.join("\n"))}</blockquote>`);
+      continue;
+    }
+
+    const listRe = /^\s*([-*+]|\d+[.)])\s+(.*)$/;
+    const li = line.match(listRe);
+    if (li) {
+      const ordered = /\d/.test(li[1]);
+      const items = [];
+      while (i < lines.length) {
+        const m = lines[i].match(listRe);
+        if (m && /\d/.test(m[1]) === ordered) { items.push(m[2]); i++; }
+        else if (lines[i].trim() && /^\s{2,}/.test(lines[i]) && items.length) { items[items.length - 1] += " " + lines[i].trim(); i++; }
+        else break;
+      }
+      const tag = ordered ? "ol" : "ul";
+      out.push(`<${tag}>${items.map((t) => `<li>${inline(t)}</li>`).join("")}</${tag}>`);
+      continue;
+    }
+
+    const para = [];
+    while (
+      i < lines.length && lines[i].trim() &&
+      !/^\s*```/.test(lines[i]) && !/^#{1,6}\s/.test(lines[i]) && !listRe.test(lines[i]) && !/^\s*>/.test(lines[i])
+    ) para.push(lines[i++]);
+    out.push(`<p>${para.map(inline).join("<br>")}</p>`);
+  }
+
+  return out.join("");
+}
+
+
+const RULES = `Sen Akıncı AI'sın. Bu bir sohbet arayüzü; aşağıdaki kullanıcı mesajlarına Akıncı olarak cevap ver. İki uzmanlık alanın var: yazılım geliştirme ve Osmanlı İmparatorluğu.
+
+Kod yazma:
+- İstenen kodu eksiksiz ve çalıştırılabilir ver; "..." gibi boşluk bırakma. Birden fazla dosya gerekiyorsa her birini ayrı kod bloğunda, başında dosya yoluyla ver.
+- Dil veya kütüphane belirtilmemişse yaygın ve güncel olanı seç, seçimini tek cümleyle belirt.
+- Hataları, uç durumları ve güvenlik açıklarını baştan düşün. Kullanıcının kodundaki hatanın nedenini ve düzeltmesini göster.
+- Kodun ardından yalnızca gerekeni açıkla: nasıl çalıştırılır, önemli kararlar. Kod bloklarına her zaman dil etiketi ekle.
+
+Osmanlı:
+- Osmanlı tarihini (1299–1922), kurumlarını ve kültürünü tarihçi derinliğinde anlat: padişahlar, divan, tımar, yeniçeri, ilmiye, vakıflar, Tanzimat, Meşrutiyet, Mimar Sinan, divan ve halk edebiyatı, gündelik hayat.
+- Tarih, isim ve sayıları doğru ver. Tartışmalı konularda farklı görüşleri ve hangisinin daha yaygın kabul gördüğünü belirt. Emin olmadığın ayrıntıyı uydurma; açıkça söyle.
+- Hicri ve Rumi tarihlerin Miladi karşılığını da ver.
+- Osmanlı Türkçesi: Arap harfli metni Latin harflerine çevir, sadeleştir, kelime kökenlerini (Arapça, Farsça, Türkçe) açıkla. Okunuşu belirsiz kelimeleri işaretle.
+
+Genel: Kullanıcı hangi dilde yazıyorsa o dilde cevap ver; varsayılan Türkçe. Doğrudan cevaba gir. Başlık, liste, tablo ve kod için Markdown kullan.`;
+
+const SLEEP_AFTER_MS = 30000;
+const STORE_KEY = "akinci-chat-v1";
+const $ = (id) => document.getElementById(id);
+const chat = $("chat"), list = $("messages"), empty = $("empty"), form = $("composer"), input = $("input"), sendBtn = $("send"), stopBtn = $("stop"), notice = $("notice");
+const AVATAR = '<svg class="avatar" viewBox="4 0 14 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="8" y="1" width="6" height="1" fill="#d0262d"/><rect x="7" y="2" width="8" height="4" fill="#d0262d"/><rect x="11.5" y="1" width="1" height="1.6" fill="#0a0c12"/><rect x="12" y="2.6" width="1.5" height="1.6" fill="#0a0c12"/><rect x="5" y="6" width="11" height="1" fill="#0b6bff"/><rect x="5" y="7" width="12" height="7" fill="#0b6bff"/><rect x="6" y="14" width="10" height="1" fill="#0b6bff"/><rect x="8" y="10.5" width="1.5" height="1" fill="#0a0c12"/><rect x="12.5" y="10.5" width="1.5" height="1" fill="#0a0c12"/></svg>';
+
+let turns = [];          // {role, content}
+let tier = "default";
+let busy = false, ctl = null, sleepTimer = null;
+let samplePromise = window.claude?.use ? window.claude.use("sample") : Promise.resolve(null);
+
+const store = {
+  load() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch { return null; } },
+  save() { try { localStorage.setItem(STORE_KEY, JSON.stringify({ turns: turns.slice(-40), tier })); } catch {} },
+};
+
+// ---------- maskot ----------
+const mascot = createMascots(".mascot", (s) => { $("status").textContent = STATUS_TEXT[s]; $("statusSm").textContent = STATUS_TEXT[s]; });
+mascot.set("coffee");
+function armSleep() { clearTimeout(sleepTimer); sleepTimer = setTimeout(() => { if (!busy) mascot.set("sleep"); }, SLEEP_AFTER_MS); }
+function activity() { if (busy) return; if (mascot.get() === "sleep") mascot.set("coffee"); armSleep(); }
+for (const ev of ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"]) window.addEventListener(ev, activity, { passive: true });
+armSleep();
+
+// ---------- mod ----------
+function setTier(t) {
+  tier = t;
+  for (const b of document.querySelectorAll(".seg button")) b.setAttribute("aria-pressed", String(b.dataset.tier === t));
+  store.save();
+}
+for (const b of document.querySelectorAll(".seg button")) b.addEventListener("click", () => setTier(b.dataset.tier));
+
+// ---------- mesajlar ----------
+function nearBottom() { return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 160; }
+function addUser(text) {
+  const li = document.createElement("li"); li.className = "msg msg-user";
+  const b = document.createElement("div"); b.className = "bubble"; b.textContent = text;
+  li.append(b); list.append(li); return li;
+}
+function addAssistant(text) {
+  const li = document.createElement("li"); li.className = "msg msg-ai";
+  li.innerHTML = AVATAR + '<div class="col"><div class="body"></div></div>';
+  const body = li.querySelector(".body");
+  if (text != null) body.innerHTML = renderMarkdown(text);
+  list.append(li); return { li, body };
+}
+function note(li, text, isErr) {
+  const p = document.createElement("p"); p.className = "msg-note" + (isErr ? " err" : ""); p.textContent = text;
+  li.querySelector(".col").append(p);
+}
+function showNotice(text) { notice.textContent = text; notice.hidden = !text; }
+
+list.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-copy]"); if (!btn) return;
+  const code = btn.closest(".codeblock").querySelector("code");
+  try { await navigator.clipboard.writeText(code.textContent); btn.textContent = "Kopyalandı"; }
+  catch { const r = document.createRange(); r.selectNodeContents(code); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Seçildi, kopyala"; }
+  setTimeout(() => (btn.textContent = "Kopyala"), 1800);
+});
+
+const ERRORS = {
+  not_granted: "Akıncı'nın Claude hesabını kullanmasına izin verilmedi. İzin vermek için sayfayı yenileyip tekrar sor.",
+  sampling_disabled: "Bu hesapta Claude kullanılamıyor.",
+  rate_limited: "Şu an çok fazla istek var ya da Claude kullanım sınırına ulaşıldı. Biraz sonra tekrar dene.",
+  session_expired: "Oturumun kapanmış. claude.ai'de yeniden giriş yapıp tekrar dene.",
+  refused: "Bu istek yanıtlanamadı. Soruyu farklı ifade etmeyi dene.",
+  empty_completion: "Cevap boş geldi. Soruyu biraz değiştirip tekrar dene.",
+  prompt_too_large: "Sohbet çok uzadı. Yeni sohbet başlat.",
+  upstream_error: "Bağlantı sorunu oldu. Tekrar dene.",
+};
+
+function contextTurns(newText) {
+  // Talimat her zaman ilk kullanıcı turu; eski turlar boyut sınırı için kırpılır.
+  let hist = turns.slice();
+  const size = (arr) => arr.reduce((n, t) => n + t.content.length, 0);
+  while (hist.length && size(hist) + newText.length > 120000) hist = hist.slice(2);
+  return [{ role: "user", content: RULES }, ...hist, { role: "user", content: newText }];
+}
+
+function setBusy(v) {
+  busy = v; sendBtn.hidden = v; stopBtn.hidden = !v;
+  if (!v) { mascot.set("coffee"); armSleep(); } else clearTimeout(sleepTimer);
+}
+
+async function send(text) {
+  text = text.trim();
+  if (busy || !text) return;
+  const sample = await samplePromise;
+  if (!sample) { showNotice("Yapay zeka bu görünümde kullanılamıyor. Sayfayı claude.ai'de oturum açıkken aç."); return; }
+
+  empty.hidden = true;
+  addUser(text);
+  input.value = ""; autosize();
+  const { li, body } = addAssistant(null);
+  body.innerHTML = '<span class="thinking">Düşünüyor</span>';
+  chat.scrollTop = chat.scrollHeight;
+
+  setBusy(true); mascot.set("thinking");
+  ctl = new AbortController();
+  let raw = "", frame = 0;
+  const paint = () => { frame = 0; const stick = nearBottom(); body.innerHTML = renderMarkdown(raw); body.classList.add("cursor"); if (stick) chat.scrollTop = chat.scrollHeight; };
+
+  try {
+    const res = await sample(contextTurns(text), {
+      modelTier: tier, cache: false, signal: ctl.signal,
+      onText: ({ text: t }) => { if (mascot.get() !== "writing") mascot.set("writing"); raw = t; if (!frame) frame = requestAnimationFrame(paint); },
+    });
+    raw = res.text;
+    turns.push({ role: "user", content: text }, { role: "assistant", content: raw });
+    store.save();
+    if (res.truncated) note(li, "Cevap uzunluk sınırında kesildi. Devamını iste.");
+    if (tier !== res.modelTierApplied && res.modelTierApplied) note(li, "Bu hesapta seçilen mod yok; yakın bir modla cevaplandı.");
+  } catch (e) {
+    const code = e && e.code;
+    raw = code === "refused" ? "" : (e && e.text) || "";
+    if (code === "cancelled") note(li, "Durduruldu. Bu tur sohbete eklenmedi.");
+    else note(li, ERRORS[code] || ERRORS.upstream_error, true);
+    if (code === "not_granted" || code === "sampling_disabled") showNotice(ERRORS[code]);
+  } finally {
+    if (frame) cancelAnimationFrame(frame);
+    body.classList.remove("cursor");
+    if (raw) body.innerHTML = renderMarkdown(raw); else body.remove();
+    ctl = null; setBusy(false);
+  }
+}
+
+function resetChat() {
+  if (busy) ctl?.abort();
+  turns = []; store.save();
+  list.innerHTML = ""; empty.hidden = false; input.focus();
+}
+
+form.addEventListener("submit", (e) => { e.preventDefault(); send(input.value); });
+stopBtn.addEventListener("click", () => ctl?.abort());
+input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
+input.addEventListener("input", autosize);
+for (const c of document.querySelectorAll(".chip")) c.addEventListener("click", () => send(c.textContent));
+$("newChat").addEventListener("click", resetChat);
+$("newChatSm").addEventListener("click", resetChat);
+
+// ---------- açılış ----------
+const saved = store.load();
+setTier(saved?.tier && ["quick", "default", "complex"].includes(saved.tier) ? saved.tier : "default");
+if (saved?.turns?.length) {
+  turns = saved.turns.filter((t) => t && (t.role === "user" || t.role === "assistant") && typeof t.content === "string");
+  empty.hidden = !turns.length;
+  for (const t of turns) t.role === "user" ? addUser(t.content) : addAssistant(t.content);
+  requestAnimationFrame(() => (chat.scrollTop = chat.scrollHeight));
+}
+samplePromise.then((s) => { if (!s) showNotice("Yapay zeka bu görünümde kullanılamıyor. Sayfayı claude.ai'de oturum açıkken aç."); });
+})();
+</script>

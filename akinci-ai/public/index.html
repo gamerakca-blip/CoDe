@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090e" />
+  <meta name="description" content="Akıncı AI: kod yazan, Osmanlı tarihini bilen yapay zeka asistanı." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Akıncı AI" />
+  <title>Akıncı AI</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="fonts.css" />
+  <link rel="stylesheet" href="vendor/hljs-theme.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-name">AKINCI</span><span class="brand-ai">AI</span>
+      </div>
+
+      <div class="desk">
+        <div class="mascot mascot-lg" data-state="coffee" aria-hidden="true"></div>
+        <div class="desk-floor"></div>
+        <p class="status" id="status" aria-live="polite">Kahve içiyor</p>
+      </div>
+
+      <button class="btn btn-ghost" id="newChat" type="button">+ Yeni sohbet</button>
+
+      <div class="account" id="account" hidden>
+        <div class="account-row">
+          <span class="account-name" id="accName"></span>
+          <span class="badge" id="accPlan"></span>
+        </div>
+        <div class="quota">
+          <div class="quota-text"><span>Bugün</span><span id="quotaText"></span></div>
+          <div class="quota-bar"><span id="quotaFill"></span></div>
+        </div>
+        <button class="btn btn-upgrade" id="openPlans" type="button">Planlar</button>
+        <button class="link" id="logout" type="button">Çıkış yap</button>
+      </div>
+      <p class="meta" id="meta"></p>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="mascot mascot-sm" data-state="coffee" aria-hidden="true"></div>
+        <div class="topbar-text">
+          <span class="brand-name">AKINCI</span><span class="brand-ai">AI</span>
+          <span class="status status-sm" id="statusSm">Kahve içiyor</span>
+        </div>
+        <button class="badge badge-btn" id="openPlansSm" type="button" hidden></button>
+        <button class="btn btn-ghost btn-icon" id="newChatSm" type="button" aria-label="Yeni sohbet">+</button>
+      </header>
+
+      <section class="chat" id="chat">
+        <div class="empty" id="empty">
+          <h1 class="empty-title">Ne yazalım?</h1>
+          <p class="empty-sub">Kod yazar, hata ayıklar, Osmanlı tarihini ve Osmanlıcayı anlatır.</p>
+          <p class="chips-label">Kod</p>
+          <div class="chips">
+            <button class="chip" type="button">Python ile klasördeki dosyaları tarihe göre yeniden adlandıran betik yaz</button>
+            <button class="chip" type="button">React'te sürükle-bırak yapılacaklar listesi yap</button>
+            <button class="chip" type="button">Express ile JWT girişli REST API kur</button>
+          </div>
+          <p class="chips-label">Osmanlı</p>
+          <div class="chips">
+            <button class="chip" type="button">Kanuni Sultan Süleyman dönemini ana hatlarıyla anlat</button>
+            <button class="chip" type="button">"Devlet-i Aliyye-i Osmaniyye" ne demek, kelimelerin kökeni ne?</button>
+            <button class="chip" type="button">Hicri tarihi Miladi tarihe çeviren TypeScript fonksiyonu yaz</button>
+          </div>
+        </div>
+        <ol class="messages" id="messages"></ol>
+      </section>
+
+      <form class="composer" id="composer">
+        <div class="composer-box">
+          <textarea id="input" rows="1" placeholder="Kod iste veya Osmanlı hakkında sor…" autocomplete="off" enterkeyhint="send" required></textarea>
+          <button class="btn btn-send" id="send" type="submit" aria-label="Gönder">
+            <svg viewBox="0 0 8 8" width="16" height="16" shape-rendering="crispEdges"><path fill="currentColor" d="M3 0h2v1h1v1h1v1h1v1H5v4H3V4H0V3h1V2h1V1h1z"/></svg>
+          </button>
+          <button class="btn btn-stop" id="stop" type="button" aria-label="Durdur" hidden>
+            <svg viewBox="0 0 8 8" width="14" height="14" shape-rendering="crispEdges"><path fill="currentColor" d="M1 1h6v6H1z"/></svg>
+          </button>
+        </div>
+        <p class="hint">Enter gönderir · Shift+Enter yeni satır</p>
+      </form>
+    </main>
+  </div>
+
+  <!-- Giriş / kayıt -->
+  <div class="overlay" id="authView" hidden>
+    <div class="dialog auth">
+      <div class="mascot mascot-md" data-state="coffee" aria-hidden="true"></div>
+      <h2 class="dialog-title">Akıncı AI</h2>
+      <div class="tabs" role="tablist">
+        <button class="tab active" type="button" data-mode="login" role="tab" aria-selected="true">Giriş</button>
+        <button class="tab" type="button" data-mode="register" role="tab" aria-selected="false">Kayıt ol</button>
+      </div>
+      <form id="authForm" novalidate>
+        <label class="field" id="nameField" hidden>
+          <span>Ad soyad</span>
+          <input name="name" autocomplete="name" maxlength="80" />
+        </label>
+        <label class="field">
+          <span>E-posta</span>
+          <input name="email" type="email" autocomplete="email" inputmode="email" required />
+        </label>
+        <label class="field">
+          <span>Şifre</span>
+          <input name="password" type="password" autocomplete="current-password" minlength="8" required />
+        </label>
+        <label class="field" id="ownerField" hidden>
+          <span>Sahip kodu</span>
+          <input name="ownerCode" type="password" autocomplete="off" />
+        </label>
+        <p class="form-error" id="authError" role="alert"></p>
+        <button class="btn btn-primary" id="authSubmit" type="submit">Giriş yap</button>
+      </form>
+      <p class="fineprint">Ücretsiz plan: günde 50 mesaj. Kayıt olarak <a href="/yasal/gizlilik" target="_blank" rel="noopener">Gizlilik ve KVKK metnini</a> okuduğunu kabul edersin.</p>
+    </div>
+  </div>
+
+  <!-- Planlar -->
+  <div class="overlay" id="plansView" hidden>
+    <div class="dialog plans-dialog" role="dialog" aria-labelledby="plansTitle">
+      <button class="dialog-close" id="closePlans" type="button" aria-label="Kapat">×</button>
+      <h2 class="dialog-title" id="plansTitle">Planlar</h2>
+      <p class="plans-msg" id="plansMsg" hidden></p>
+      <div class="account-mobile" id="accMobile"></div>
+      <label class="consent" id="consentRow">
+        <input type="checkbox" id="consent" />
+        <span><a href="/yasal/mesafeli-satis" target="_blank" rel="noopener">Mesafeli Satış Sözleşmesi</a>'ni ve <a href="/yasal/iade" target="_blank" rel="noopener">İptal ve İade Koşulları</a>'nı okudum. Hizmetin ödemeden hemen sonra başlamasını ve bu nedenle cayma hakkımın olmadığını kabul ediyorum.</span>
+      </label>
+      <div class="plans" id="plans"></div>
+      <p class="fineprint">Ödemeler iyzico güvencesiyle alınır; kart bilgilerin bu siteye gelmez. Ücretli planlar 30 gün geçerlidir ve otomatik yenilenmez.</p>
+
+      <details class="pw">
+        <summary>Şifre değiştir</summary>
+        <form id="pwForm" novalidate>
+          <label class="field"><span>Mevcut şifre</span><input name="current" type="password" autocomplete="current-password" required /></label>
+          <label class="field"><span>Yeni şifre (en az 8 karakter)</span><input name="next" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <p class="form-error" id="pwError" role="alert"></p>
+          <button class="btn btn-primary" type="submit">Şifreyi güncelle</button>
+        </form>
+      </details>
+      <p class="legal-links"><a href="/yasal/mesafeli-satis" target="_blank" rel="noopener">Mesafeli Satış</a> · <a href="/yasal/iade" target="_blank" rel="noopener">İptal ve İade</a> · <a href="/yasal/gizlilik" target="_blank" rel="noopener">Gizlilik ve KVKK</a> · <a href="/yasal/iletisim" target="_blank" rel="noopener">İletişim</a></p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script src="vendor/highlight.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
